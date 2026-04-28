@@ -1,0 +1,69 @@
+import { LayoutDashboard, FolderKanban, Zap, Gavel, ScrollText, BarChart3, Sparkles } from "lucide-react";
+import { NavLink, useLocation } from "react-router-dom";
+import {
+  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
+  SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar, SidebarHeader,
+} from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
+
+const items = [
+  { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Projects", url: "/projects", icon: FolderKanban },
+  { title: "Ad-hoc Requests", url: "/requests", icon: Zap },
+  { title: "Decisions", url: "/decisions", icon: Gavel },
+  { title: "Audit Log", url: "/audit", icon: ScrollText },
+  { title: "Analytics", url: "/analytics", icon: BarChart3 },
+];
+
+export function AppSidebar() {
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
+  const location = useLocation();
+  const isActive = (path: string) => path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
+
+  return (
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="border-b border-sidebar-border">
+        <div className="flex items-center gap-2.5 px-2 py-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-accent to-status-adhoc text-white shadow-sm">
+            <Sparkles className="h-4 w-4" />
+          </div>
+          {!collapsed && (
+            <div className="flex flex-col leading-tight">
+              <span className="font-display text-sm font-semibold tracking-tight">PlanSync</span>
+              <span className="text-[10px] text-muted-foreground">Decision System</span>
+            </div>
+          )}
+        </div>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {items.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      to={item.url}
+                      end={item.url === "/"}
+                      className={cn(
+                        "transition-colors",
+                        isActive(item.url)
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                          : "hover:bg-sidebar-accent/50"
+                      )}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {!collapsed && <span>{item.title}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+    </Sidebar>
+  );
+}

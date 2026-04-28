@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Q2 2026 — Project Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body, #root { height: 100%; }
+  body { font-family: 'Plus Jakarta Sans', sans-serif; background: #F0F2F7; color: #1B1E2E; -webkit-font-smoothing: antialiased; }
+  .row-hover:hover { background: rgba(0,0,0,0.025) !important; }
+  .filter-btn { transition: all 0.15s; }
+  .filter-btn:hover { opacity: 0.85; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #C8CCDA; border-radius: 3px; }
+  .tweak-toggle { transition: background 0.15s; }
+  .tweak-toggle:hover { background: rgba(0,0,0,0.05) !important; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect, useCallback } = React;
+
+// ── Palette ───────────────────────────────────────────────────────────────────
+const CAT = {
+  AVOD: { color: '#3B6EE8', light: '#EBF0FD', dark: '#2A52C2', label: 'AVOD' },
+  SVOD: { color: '#0BAF72', light: '#E4F7EF', dark: '#098C5A', label: 'SVOD' },
+  TVOD: { color: '#E8820F', light: '#FEF1E3', dark: '#C06A0A', label: 'TVOD' },
+};
+const STATUS_DOT = {
+  'Planned':     '#9BA4B8',
+  'In Progress': '#3B6EE8',
+  'Blocked':     '#E84040',
+  'Complete':    '#0BAF72',
+};
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "compact": false,
+  "hideUnplanned": false,
+  "hideComplete": false
+}/*EDITMODE-END*/;
+
+// ── Timeline setup ────────────────────────────────────────────────────────────
+const Q2_START = new Date(2026, 3, 1);
+const TOTAL_DAYS = 91;
+const LEFT_W = 296;
+const TODAY_DAY = 27; // Apr 28 = day index 27
+
+function d(m, day) { return new Date(2026, m - 1, day); }
+
+const MONTHS = [
+  { label: 'April',  days: 30, startDay: 0  },
+  { label: 'May',    days: 31, startDay: 30 },
+  { label: 'June',   days: 30, startDay: 61 },
+];
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+const RAW = [
+  { cat:'AVOD', sub:'Display Advertising', projects:[
+    { name:'Digital Ad Integration',   owner:'Alex M.',   start:d(4,1),  end:d(5,15), status:'In Progress', planned:true  },
+    { name:'Ad Server Migration',      owner:'Sarah K.',  start:d(4,15), end:d(6,30), status:'Planned',     planned:true  },
+    { name:'A/B Test Framework',       owner:'James T.',  start:d(5,1),  end:d(6,15), status:'Planned',     planned:false,
+      affects:['Ad Server Migration','Skippable Ads Rollout'], affectReason:'Consuming James T. bandwidth — pushing Ad Server Migration by ~2 weeks; shared QA pipeline delays Skippable Ads Rollout.' },
+  ]},
+  { cat:'AVOD', sub:'Pre-roll Video', projects:[
+    { name:'Pre-roll Optimization',    owner:'Maria R.',  start:d(4,1),  end:d(4,30), status:'Complete',    planned:true  },
+    { name:'Skippable Ads Rollout',    owner:'David L.',  start:d(5,1),  end:d(6,30), status:'In Progress', planned:true  },
+  ]},
+  { cat:'AVOD', sub:'Programmatic', projects:[
+    { name:'DSP Integration',          owner:'Tom W.',    start:d(4,1),  end:d(5,31), status:'In Progress', planned:true  },
+    { name:'Bid Floor Automation',     owner:'Lisa P.',   start:d(5,15), end:d(6,30), status:'Planned',     planned:false,
+      affects:['DSP Integration'], affectReason:'Requires shared data pipeline with DSP Integration — competing for infra resources in May, risking DSP go-live date.' },
+    { name:'Programmatic Audit',       owner:'Tom W.',    start:d(4,1),  end:d(4,15), status:'Complete',    planned:true  },
+  ]},
+  { cat:'SVOD', sub:'Premium Tier', projects:[
+    { name:'4K Content Expansion',     owner:'Rachel S.', start:d(4,1),  end:d(6,30), status:'In Progress', planned:true  },
+    { name:'Offline Downloads v2',     owner:'Chris A.',  start:d(4,15), end:d(5,31), status:'In Progress', planned:true  },
+    { name:'Profile Sharing Controls', owner:'Emma D.',   start:d(5,1),  end:d(6,30), status:'Planned',     planned:true  },
+  ]},
+  { cat:'SVOD', sub:'Standard Tier', projects:[
+    { name:'Price Localization',       owner:'John B.',   start:d(4,1),  end:d(5,15), status:'Complete',    planned:true  },
+    { name:'Student Discount Program', owner:'Nina C.',   start:d(4,15), end:d(6,15), status:'In Progress', planned:false,
+      affects:['Win-back Campaign','Partner Bundle Launch'], affectReason:'Overlapping user cohorts with Win-back Campaign; discount logic conflicts with Partner Bundle pricing rules.' },
+  ]},
+  { cat:'SVOD', sub:'Trials & Promotions', projects:[
+    { name:'Free Trial Optimization',  owner:'Ben F.',    start:d(4,1),  end:d(4,30), status:'Complete',    planned:true  },
+    { name:'Win-back Campaign',        owner:'Amy G.',    start:d(5,1),  end:d(6,30), status:'Planned',     planned:true  },
+    { name:'Partner Bundle Launch',    owner:'Kevin H.',  start:d(4,1),  end:d(6,30), status:'Blocked',     planned:true  },
+  ]},
+  { cat:'TVOD', sub:'Rental', projects:[
+    { name:'Dynamic Pricing Engine',   owner:'Priya S.',  start:d(4,1),  end:d(5,31), status:'In Progress', planned:true  },
+    { name:'48hr Rental Windows',      owner:'Jake M.',   start:d(4,1),  end:d(4,30), status:'Complete',    planned:true  },
+    { name:'Rental Recommendations',   owner:'Priya S.',  start:d(5,15), end:d(6,30), status:'Planned',     planned:false,
+      affects:['Gift Purchase Flow','UHD Purchase Tier'], affectReason:'Priya S. is double-booked with Dynamic Pricing Engine deliverables; recommendation ML model also feeds into UHD Purchase Tier personalisation.' },
+  ]},
+  { cat:'TVOD', sub:'Purchase', projects:[
+    { name:'UHD Purchase Tier',        owner:'Sam T.',    start:d(4,15), end:d(6,15), status:'In Progress', planned:true  },
+    { name:'Gift Purchase Flow',       owner:'Rita V.',   start:d(5,1),  end:d(6,30), status:'Planned',     planned:true  },
+  ]},
+  { cat:'TVOD', sub:'Bundles', projects:[
+    { name:'AVOD+TVOD Bundle',         owner:'Carlos N.', start:d(4,1),  end:d(6,30), status:'Blocked',     planned:true  },
+    { name:'Season Pass Feature',      owner:'Dana K.',   start:d(5,1),  end:d(6,30), status:'Planned',     planned:true  },
+  ]},
+];
+
+function buildHierarchy(raw) {
+  const catMap = {};
+  raw.forEach(({ cat, sub, projects }) => {
+    if (!catMap[cat]) catMap[cat] = { id: cat, name: cat, type: 'category', subs: {} };
+    if (!catMap[cat].subs[sub]) catMap[cat].subs[sub] = { id: `${cat}||${sub}`, name: sub, type: 'subcategory', cat, projects: [] };
+    projects.forEach((p, i) => catMap[cat].subs[sub].projects.push({ ...p, id: `${cat}||${sub}||${i}`, type: 'project', cat }));
+  });
+  return Object.values(catMap).map(c => ({ ...c, subs: Object.values(c.subs) }));
+}
+const DATA = buildHierarchy(RAW);
+
+// Build impact lookup maps
+const ALL_PROJECTS = RAW.flatMap(r => r.projects);
+// name → project
+const PROJ_BY_NAME = {};
+ALL_PROJECTS.forEach(p => { PROJ_BY_NAME[p.name] = p; });
+// name → which unplanned project affects it
+const AFFECTED_BY = {};
+ALL_PROJECTS.filter(p => !p.planned && p.affects).forEach(u => {
+  u.affects.forEach(affName => {
+    if (!AFFECTED_BY[affName]) AFFECTED_BY[affName] = [];
+    AFFECTED_BY[affName].push(u);
+  });
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function dayOff(date) {
+  return Math.max(0, Math.min(TOTAL_DAYS - 1, Math.floor((date - Q2_START) / 86400000)));
+}
+function fmtDate(d) { return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+function catProgress(catName) {
+  const projs = RAW.filter(r => r.cat === catName).flatMap(r => r.projects);
+  const done = projs.filter(p => p.status === 'Complete').length;
+  return { done, total: projs.length, pct: projs.length ? Math.round(done / projs.length * 100) : 0 };
+}
+function subProgress(cat, subName) {
+  const row = RAW.find(r => r.cat === cat && r.sub === subName);
+  if (!row) return { done: 0, total: 0, pct: 0 };
+  const done = row.projects.filter(p => p.status === 'Complete').length;
+  return { done, total: row.projects.length, pct: row.projects.length ? Math.round(done / row.projects.length * 100) : 0 };
+}
+
+// ── Tooltip ───────────────────────────────────────────────────────────────────
+function Tooltip({ task, pos }) {
+  if (!task || !pos) return null;
+  const c = CAT[task.cat];
+  const statusColor = STATUS_DOT[task.status];
+  return (
+    <div style={{
+      position:'fixed', left: pos.x + 14, top: pos.y - 12,
+      background:'#1B1E2E', color:'#E8EAF2', borderRadius:10,
+      padding:'12px 16px', fontSize:12, lineHeight:1.7,
+      pointerEvents:'none', zIndex:9999, minWidth:220, maxWidth:260,
+      boxShadow:'0 8px 32px rgba(0,0,0,0.35)',
+    }}>
+      <div style={{ fontWeight:700, fontSize:13, color:'#fff', marginBottom:8, lineHeight:1.3 }}>{task.name}</div>
+      <Row l="Owner"  v={task.owner} />
+      <Row l="Start"  v={fmtDate(task.start)} />
+      <Row l="End"    v={fmtDate(task.end)} />
+      <Row l="Status" v={<span style={{ color: statusColor, fontWeight:600 }}>{task.status}</span>} />
+      <div style={{ marginTop:10, display:'flex', gap:6 }}>
+        <Chip bg={c.color} text={task.cat} />
+        {!task.planned && <Chip bg="#C06A0A" text="Unplanned" />}
+      </div>
+    </div>
+  );
+}
+function Row({ l, v }) {
+  return (
+    <div style={{ display:'flex', gap:8 }}>
+      <span style={{ color:'#6B7490', minWidth:46 }}>{l}</span>
+      <span style={{ color:'#E8EAF2' }}>{v}</span>
+    </div>
+  );
+}
+function Chip({ bg, text }) {
+  return <span style={{ background:bg, color:'#fff', borderRadius:4, padding:'1px 8px', fontSize:11, fontWeight:700 }}>{text}</span>;
+}
+
+// ── Task bar ──────────────────────────────────────────────────────────────────
+function TaskBar({ task, dayPx, rowH, onEnter, onMove, onLeave }) {
+  const left = dayOff(task.start) * dayPx;
+  const right = (dayOff(task.end) + 1) * dayPx;
+  const width = Math.max(dayPx, right - left);
+  const c = CAT[task.cat];
+
+  let bg, borderStyle, textColor;
+  if (task.status === 'Blocked') {
+    bg = '#E84040'; borderStyle = 'none'; textColor = '#fff';
+  } else if (task.status === 'Complete') {
+    bg = c.color; borderStyle = 'none'; textColor = '#fff';
+    // stripes for complete
+  } else if (task.status === 'Planned') {
+    bg = c.light; borderStyle = `1.5px dashed ${c.color}`; textColor = c.dark;
+  } else {
+    bg = c.color; borderStyle = 'none'; textColor = '#fff';
+  }
+
+  const BAR_H = Math.round(rowH * 0.62);
+  const top = Math.round((rowH - BAR_H) / 2);
+  const showLabel = width > 72;
+
+  return (
+    <div
+      style={{
+        position:'absolute', left, top, width, height: BAR_H,
+        background: bg, border: borderStyle,
+        borderRadius: 5, cursor:'pointer',
+        display:'flex', alignItems:'center', overflow:'hidden',
+        opacity: task.status === 'Complete' ? 0.72 : 1,
+        boxShadow: task.status !== 'Planned' ? '0 1px 4px rgba(0,0,0,0.18)' : 'none',
+      }}
+      onMouseEnter={onEnter}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+    >
+      {task.status === 'Complete' && (
+        <div style={{
+          position:'absolute', inset:0,
+          background:'repeating-linear-gradient(135deg, transparent, transparent 6px, rgba(255,255,255,0.12) 6px, rgba(255,255,255,0.12) 12px)',
+        }}/>
+      )}
+      {showLabel && (
+        <span style={{
+          paddingLeft:8, fontSize:10.5, fontWeight:600, whiteSpace:'nowrap',
+          color: textColor, overflow:'hidden', textOverflow:'ellipsis', position:'relative',
+        }}>
+          {!task.planned && <span style={{ opacity:0.8 }}>⚡ </span>}
+          {task.name}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ── Timeline column header ────────────────────────────────────────────────────
+function TimelineHeader({ dayPx }) {
+  const todayX = TODAY_DAY * dayPx + dayPx / 2;
+  return (
+    <div style={{ display:'flex', flexDirection:'column', background:'#fff' }}>
+      {/* Month row */}
+      <div style={{ display:'flex', borderBottom:'1px solid #E4E6EF' }}>
+        {MONTHS.map(m => (
+          <div key={m.label} style={{
+            width: m.days * dayPx, flexShrink:0, height:28,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            fontSize:10.5, fontWeight:800, letterSpacing:0.8, textTransform:'uppercase',
+            color:'#4B5070', borderRight:'1px solid #E4E6EF',
+          }}>{m.label}</div>
+        ))}
+      </div>
+      {/* Week row */}
+      <div style={{ display:'flex', position:'relative', borderBottom:'2px solid #E4E6EF' }}>
+        {Array.from({ length: 13 }, (_, w) => {
+          const startDay = w * 7;
+          const wd = new Date(Q2_START.getTime() + startDay * 86400000);
+          const label = wd.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+          const wDays = Math.min(7, TOTAL_DAYS - startDay);
+          return (
+            <div key={w} style={{
+              width: wDays * dayPx, flexShrink:0, height:26,
+              display:'flex', alignItems:'center', justifyContent:'center',
+              fontSize:10, color:'#8B95B8', borderRight:'1px solid #E4E6EF',
+            }}>{label}</div>
+          );
+        })}
+        {/* Today pill in header */}
+        <div style={{
+          position:'absolute', left: todayX - 1, top:0, bottom:0, width:2,
+          background:'#E84040', zIndex:2,
+        }}/>
+        <div style={{
+          position:'absolute', left: todayX - 22, top: 3,
+          background:'#E84040', color:'#fff', fontSize:9, fontWeight:700,
+          padding:'2px 6px', borderRadius:3, letterSpacing:0.3,
+        }}>TODAY</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Single gantt row ──────────────────────────────────────────────────────────
+function GanttRow({ item, isCollapsed, onToggle, onHover, dayPx, compact, filterCat, filterStatus, hideUnplanned }) {
+  const rowH = compact
+    ? (item.type==='category' ? 38 : item.type==='subcategory' ? 32 : 28)
+    : (item.type==='category' ? 46 : item.type==='subcategory' ? 38 : 34);
+
+  const isProject = item.type === 'project';
+  const isCat = item.type === 'category';
+  const isSub = item.type === 'subcategory';
+
+  if (isProject) {
+    if (filterCat !== 'All' && item.cat !== filterCat) return null;
+    if (filterStatus !== 'All' && item.status !== filterStatus) return null;
+    if (hideUnplanned && !item.planned) return null;
+  }
+
+  const c = CAT[item.cat || item.name] || CAT.AVOD;
+  const todayX = TODAY_DAY * dayPx + dayPx / 2;
+  const indent = isCat ? 0 : isSub ? 16 : 30;
+
+  // Background
+  let rowBg = isCat ? c.light : isSub ? '#F7F8FB' : '#FFFFFF';
+
+  // Progress for category/sub headers
+  const prog = isCat ? catProgress(item.name) : isSub ? subProgress(item.cat, item.name) : null;
+
+  return (
+    <div className="row-hover" style={{
+      display:'flex', height: rowH,
+      borderBottom:`1px solid ${isCat ? '#D8DCE8' : '#ECEEF5'}`,
+      background: rowBg,
+    }}>
+      {/* LEFT LABEL */}
+      <div
+        style={{
+          width: LEFT_W, flexShrink:0, position:'sticky', left:0, zIndex:5,
+          background: rowBg, borderRight:'2px solid #E4E6EF',
+          display:'flex', alignItems:'center', paddingLeft: 12 + indent,
+          cursor: (isCat || isSub) ? 'pointer' : 'default',
+          gap: 6,
+        }}
+        onClick={() => (isCat || isSub) && onToggle(item.id)}
+      >
+        {(isCat || isSub) && (
+          <span style={{
+            color:'#8B95B8', fontSize:9,
+            display:'inline-block', transition:'transform 0.15s',
+            transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+          }}>▼</span>
+        )}
+
+        {isCat && (
+          <>
+            <span style={{
+              background: c.color, color:'#fff', fontWeight:700, fontSize:11,
+              padding:'2px 9px', borderRadius:4, letterSpacing:0.3,
+            }}>{item.name}</span>
+            {prog && (
+              <span style={{ fontSize:11, color: c.dark, fontWeight:600, marginLeft:4 }}>{prog.pct}%</span>
+            )}
+            {prog && (
+              <div style={{
+                flex:1, maxWidth:70, height:4, background:'rgba(0,0,0,0.08)',
+                borderRadius:2, overflow:'hidden', marginRight:12,
+              }}>
+                <div style={{ width:`${prog.pct}%`, height:'100%', background: c.color, borderRadius:2 }}/>
+              </div>
+            )}
+          </>
+        )}
+
+        {isSub && (
+          <>
+            <span style={{ fontSize:11.5, fontWeight:600, color:'#3D4266', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth: LEFT_W - 50 - indent }}>
+              {item.name}
+            </span>
+            {prog && <span style={{ fontSize:10, color:'#9BA4B8', marginRight:10, flexShrink:0 }}>{prog.done}/{prog.total}</span>}
+          </>
+        )}
+
+        {isProject && (
+          <div style={{ overflow:'hidden', flex:1 }}>
+            <div style={{
+              fontSize:11.5, fontWeight:500, color:'#1B1E2E',
+              whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
+              maxWidth: LEFT_W - 36 - indent,
+              display:'flex', alignItems:'center', gap:4,
+            }}>
+              {!item.planned && (
+                <span style={{
+                  background:'#FEF0E0', color:'#C06A0A',
+                  fontSize:9.5, fontWeight:700, padding:'0px 5px',
+                  borderRadius:3, flexShrink:0, letterSpacing:0.3,
+                }}>U</span>
+              )}
+              <span style={{ overflow:'hidden', textOverflow:'ellipsis' }}>{item.name}</span>
+            </div>
+            <div style={{ fontSize:10, color:'#9BA4B8', marginTop:1 }}>{item.owner}</div>
+          </div>
+        )}
+      </div>
+
+      {/* RIGHT TIMELINE */}
+      <div style={{ position:'relative', width: TOTAL_DAYS * dayPx, flexShrink:0 }}>
+        {/* Week grid lines */}
+        {Array.from({ length:13 }, (_, w) => (
+          <div key={w} style={{
+            position:'absolute', left: w * 7 * dayPx, top:0, bottom:0,
+            width:1, background: w % 2 === 0 ? '#ECEEF5' : '#F4F5FA',
+          }}/>
+        ))}
+        {/* Month dividers */}
+        {MONTHS.slice(1).map(m => (
+          <div key={m.label} style={{
+            position:'absolute', left: m.startDay * dayPx, top:0, bottom:0,
+            width:1, background:'#D0D3E0',
+          }}/>
+        ))}
+        {/* Today line */}
+        <div style={{
+          position:'absolute', left: todayX, top:0, bottom:0,
+          width:1.5, background:'rgba(232,64,64,0.25)', zIndex:1,
+        }}/>
+
+        {/* Task bar */}
+        {isProject && (
+          <TaskBar
+            task={item}
+            dayPx={dayPx}
+            rowH={rowH}
+            onEnter={e => onHover(item, e.clientX, e.clientY)}
+            onMove={e => onHover(item, e.clientX, e.clientY)}
+            onLeave={() => onHover(null)}
+          />
+        )}
+
+        {/* Category row: aggregate bar */}
+        {isCat && (
+          <div style={{
+            position:'absolute', left:8, right:8, top:'50%',
+            height:3, background:'rgba(0,0,0,0.06)', transform:'translateY(-50%)',
+            borderRadius:2,
+          }}>
+            <div style={{ width:`${prog.pct}%`, height:'100%', background: c.color, opacity:0.5, borderRadius:2 }}/>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main app ──────────────────────────────────────────────────────────────────
+function App() {
+  const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
+  const [collapsed, setCollapsed] = useState({});
+  const [filterCat, setFilterCat] = useState('All');
+  const [filterStatus, setFilterStatus] = useState('All');
+  const [hoverTask, setHoverTask] = useState(null);
+  const [hoverPos, setHoverPos] = useState(null);
+  const [showTweaks, setShowTweaks] = useState(false);
+
+  const allProjects = RAW.flatMap(r => r.projects);
+  const stats = Object.fromEntries(
+    Object.keys(STATUS_DOT).map(s => [s, allProjects.filter(p => p.status === s).length])
+  );
+  const unplanned = allProjects.filter(p => !p.planned).length;
+
+  const DAY_PX = tweaks.compact ? 11 : 14;
+  const TIMELINE_W = TOTAL_DAYS * DAY_PX;
+
+  const handleToggle = id => setCollapsed(p => ({ ...p, [id]: !p[id] }));
+  const handleHover = (task, x, y) => {
+    setHoverTask(task);
+    if (x != null) setHoverPos({ x, y });
+  };
+
+  // Listen for tweaks panel messages
+  useEffect(() => {
+    const handler = e => {
+      if (e.data?.type === '__activate_edit_mode') setShowTweaks(true);
+      if (e.data?.type === '__deactivate_edit_mode') setShowTweaks(false);
+    };
+    window.addEventListener('message', handler);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const setTweak = (key, val) => {
+    setTweaks(p => {
+      const next = { ...p, [key]: val };
+      window.parent.postMessage({ type:'__edit_mode_set_keys', edits: next }, '*');
+      return next;
+    });
+  };
+
+  const statusColors = { 'Planned':'#9BA4B8','In Progress':'#3B6EE8','Blocked':'#E84040','Complete':'#0BAF72' };
+
+  return (
+    <div style={{ height:'100vh', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+
+      {/* ── Header ── */}
+      <div style={{
+        height:60, background:'#fff', borderBottom:'1px solid #E4E6EF',
+        display:'flex', alignItems:'center', paddingInline:24, gap:20, flexShrink:0,
+        boxShadow:'0 1px 4px rgba(0,0,0,0.05)',
+      }}>
+        <div>
+          <div style={{ fontSize:17, fontWeight:800, color:'#1B1E2E', letterSpacing:-0.3 }}>Q2 2026 — Project Tracker</div>
+          <div style={{ fontSize:11, color:'#9BA4B8', marginTop:1 }}>April 1 – June 30, 2026 · {allProjects.length} projects across AVOD, SVOD &amp; TVOD</div>
+        </div>
+
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:20 }}>
+          {/* Stat pills */}
+          {Object.entries(stats).map(([s, n]) => (
+            <div key={s} style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <div style={{ width:8, height:8, borderRadius:'50%', background: statusColors[s], flexShrink:0 }}/>
+              <span style={{ fontSize:12, color:'#4B5070', fontWeight:500 }}><strong style={{ color:'#1B1E2E' }}>{n}</strong> {s}</span>
+            </div>
+          ))}
+          <div style={{ width:1, height:20, background:'#E4E6EF' }}/>
+          <span style={{ fontSize:12, color:'#C06A0A', fontWeight:600 }}>{unplanned} unplanned</span>
+
+          {/* Tweaks toggle */}
+          <button
+            onClick={() => {
+              const next = !showTweaks;
+              setShowTweaks(next);
+              window.parent.postMessage({ type: next ? '__activate_edit_mode' : '__deactivate_edit_mode' }, '*');
+            }}
+            style={{
+              padding:'6px 14px', borderRadius:6, fontSize:12, fontWeight:600,
+              border:'1px solid #E4E6EF', background: showTweaks ? '#1B1E2E' : '#fff',
+              color: showTweaks ? '#fff' : '#4B5070', cursor:'pointer',
+            }}
+          >⚙ Tweaks</button>
+        </div>
+      </div>
+
+      {/* ── Filter bar ── */}
+      <div style={{
+        height:48, background:'#fff', borderBottom:'1px solid #E4E6EF',
+        display:'flex', alignItems:'center', paddingInline:24, gap:6, flexShrink:0,
+      }}>
+        <span style={{ fontSize:10, fontWeight:800, color:'#9BA4B8', textTransform:'uppercase', letterSpacing:0.8, marginRight:6 }}>Category</span>
+        {['All','AVOD','SVOD','TVOD'].map(c => (
+          <button key={c} className="filter-btn" onClick={() => setFilterCat(c)} style={{
+            padding:'4px 13px', borderRadius:20, fontSize:11.5, fontWeight:600,
+            border: filterCat===c ? 'none' : '1px solid #E4E6EF',
+            background: filterCat===c ? (c==='All' ? '#1B1E2E' : CAT[c]?.color) : '#fff',
+            color: filterCat===c ? '#fff' : '#4B5070', cursor:'pointer',
+          }}>{c}</button>
+        ))}
+
+        <div style={{ width:1, height:20, background:'#E4E6EF', marginInline:8 }}/>
+        <span style={{ fontSize:10, fontWeight:800, color:'#9BA4B8', textTransform:'uppercase', letterSpacing:0.8, marginRight:6 }}>Status</span>
+        {['All',...Object.keys(STATUS_DOT)].map(s => (
+          <button key={s} className="filter-btn" onClick={() => setFilterStatus(s)} style={{
+            padding:'4px 13px', borderRadius:20, fontSize:11.5, fontWeight:600,
+            border: filterStatus===s ? 'none' : '1px solid #E4E6EF',
+            background: filterStatus===s ? (s==='All' ? '#1B1E2E' : STATUS_DOT[s]) : '#fff',
+            color: filterStatus===s ? '#fff' : '#4B5070', cursor:'pointer',
+          }}>{s}</button>
+        ))}
+
+        {/* Legend */}
+        <div style={{ marginLeft:'auto', display:'flex', gap:14, alignItems:'center' }}>
+          {[
+            { color:'#3B6EE8', label:'In Progress' },
+            { color:'#3B6EE8', label:'Planned', dashed:true },
+            { color:'#E84040', label:'Blocked' },
+            { color:'#0BAF72', label:'Complete', stripe:true },
+          ].map(({ color, label, dashed, stripe }) => (
+            <div key={label} style={{ display:'flex', alignItems:'center', gap:5 }}>
+              <div style={{
+                width:20, height:9, borderRadius:3, flexShrink:0,
+                background: stripe ? color : dashed ? '#EBF0FD' : color,
+                border: dashed ? `1.5px dashed ${color}` : 'none',
+                opacity: stripe ? 0.72 : 1,
+                backgroundImage: stripe ? 'repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(255,255,255,0.3) 4px,rgba(255,255,255,0.3) 8px)' : 'none',
+              }}/>
+              <span style={{ fontSize:10.5, color:'#8B95B8' }}>{label}</span>
+            </div>
+          ))}
+          <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+            <div style={{ width:14, height:9, borderRadius:3, background:'#FEE8C8', border:'1px solid #E8820F' }}/>
+            <span style={{ fontSize:10.5, color:'#8B95B8' }}>Unplanned (U)</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Gantt ── */}
+      <div style={{ flex:1, overflow:'auto', position:'relative' }}>
+        <div style={{ width: LEFT_W + TIMELINE_W, position:'relative' }}>
+
+          {/* Sticky column + timeline header */}
+          <div style={{ position:'sticky', top:0, zIndex:20, display:'flex', boxShadow:'0 2px 8px rgba(0,0,0,0.07)' }}>
+            <div style={{
+              width:LEFT_W, flexShrink:0, position:'sticky', left:0, zIndex:25,
+              background:'#fff', borderRight:'2px solid #E4E6EF',
+            }}>
+              <div style={{ height:28, display:'flex', alignItems:'center', paddingLeft:16, fontSize:10, fontWeight:800, color:'#9BA4B8', textTransform:'uppercase', letterSpacing:0.8, borderBottom:'1px solid #E4E6EF' }}>
+                Project
+              </div>
+              <div style={{ height:26, display:'flex', alignItems:'center', paddingLeft:16, fontSize:10, color:'#9BA4B8', borderBottom:'2px solid #E4E6EF' }}>
+                Owner
+              </div>
+            </div>
+            <div style={{ width: TIMELINE_W, flexShrink:0 }}>
+              <TimelineHeader dayPx={DAY_PX} />
+            </div>
+          </div>
+
+          {/* Rows */}
+          {DATA.map(cat => {
+            const catCol = collapsed[cat.id];
+            return (
+              <React.Fragment key={cat.id}>
+                <GanttRow item={cat} isCollapsed={catCol} onToggle={handleToggle} onHover={handleHover} dayPx={DAY_PX} compact={tweaks.compact} filterCat={filterCat} filterStatus={filterStatus} hideUnplanned={tweaks.hideUnplanned} />
+                {!catCol && cat.subs.map(sub => {
+                  const subCol = collapsed[sub.id];
+                  return (
+                    <React.Fragment key={sub.id}>
+                      <GanttRow item={sub} isCollapsed={subCol} onToggle={handleToggle} onHover={handleHover} dayPx={DAY_PX} compact={tweaks.compact} filterCat={filterCat} filterStatus={filterStatus} hideUnplanned={tweaks.hideUnplanned} />
+                      {!subCol && sub.projects.map(proj => (
+                        <GanttRow key={proj.id} item={proj} isCollapsed={false} onToggle={handleToggle} onHover={handleHover} dayPx={DAY_PX} compact={tweaks.compact} filterCat={filterCat} filterStatus={filterStatus} hideUnplanned={tweaks.hideUnplanned} />
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
+              </React.Fragment>
+            );
+          })}
+
+          {/* Bottom padding */}
+          <div style={{ height:40 }}/>
+        </div>
+      </div>
+
+      {/* ── Tweaks panel ── */}
+      {showTweaks && (
+        <div style={{
+          position:'fixed', bottom:24, right:24, width:240,
+          background:'#fff', borderRadius:12, boxShadow:'0 8px 40px rgba(0,0,0,0.18)',
+          padding:20, zIndex:500,
+          border:'1px solid #E4E6EF',
+        }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+            <span style={{ fontWeight:700, fontSize:13, color:'#1B1E2E' }}>Tweaks</span>
+            <button onClick={() => { setShowTweaks(false); window.parent.postMessage({ type:'__edit_mode_dismissed' },'*'); }}
+              style={{ background:'none', border:'none', cursor:'pointer', fontSize:16, color:'#9BA4B8', lineHeight:1 }}>×</button>
+          </div>
+
+          {[
+            { key:'compact', label:'Compact rows', sub:'Reduce row height' },
+            { key:'hideUnplanned', label:'Hide unplanned', sub:'Show only planned projects' },
+            { key:'hideComplete', label:'Hide complete', sub:'Focus on active work' },
+          ].map(({ key, label, sub }) => (
+            <div key={key} className="tweak-toggle" onClick={() => setTweak(key, !tweaks[key])} style={{
+              display:'flex', alignItems:'center', justifyContent:'space-between',
+              padding:'10px 0', borderBottom:'1px solid #F0F2F7', cursor:'pointer',
+            }}>
+              <div>
+                <div style={{ fontSize:12.5, fontWeight:600, color:'#1B1E2E' }}>{label}</div>
+                <div style={{ fontSize:11, color:'#9BA4B8', marginTop:1 }}>{sub}</div>
+              </div>
+              <div style={{
+                width:36, height:20, borderRadius:10, position:'relative',
+                background: tweaks[key] ? '#3B6EE8' : '#D8DCE8',
+                transition:'background 0.2s', flexShrink:0,
+              }}>
+                <div style={{
+                  position:'absolute', top:3, left: tweaks[key] ? 19 : 3,
+                  width:14, height:14, borderRadius:'50%', background:'#fff',
+                  transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)',
+                }}/>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Tooltip task={hoverTask} pos={hoverPos} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
