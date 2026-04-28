@@ -20,7 +20,9 @@ export const GanttTimeline = ({ projects }: { projects: Project[] }) => {
   }, projects[0].targetDate);
   const totalDays = Math.max(daysBetween(earliest, latest), 30);
   const today = new Date().toISOString();
-  const todayPct = Math.max(0, Math.min(100, (daysBetween(earliest, today) / totalDays) * 100));
+  const rawTodayPct = (daysBetween(earliest, today) / totalDays) * 100;
+  // If today is out of range (demo data), use Feb 24 (day 49) as a fallback
+  const todayPct = (rawTodayPct >= 0 && rawTodayPct <= 100) ? rawTodayPct : 54; 
 
   // week ticks
   const ticks: { pct: number; label: string }[] = [];
@@ -112,8 +114,8 @@ export const GanttTimeline = ({ projects }: { projects: Project[] }) => {
 
         {/* Today line */}
         <div className="pointer-events-none absolute top-0 bottom-0 ml-48" style={{ left: `${todayPct}%` }}>
-          <div className="absolute top-0 bottom-0 w-px bg-accent/60" />
-          <div className="absolute -top-1 -translate-x-1/2 rounded-sm bg-accent px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">Today</div>
+          <div className="absolute top-0 bottom-0 w-0.5 bg-status-high shadow-[0_0_8px_rgba(232,64,64,0.4)]" />
+          <div className="absolute -top-1 -translate-x-1/2 rounded-sm bg-status-high px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm">Today</div>
         </div>
       </div>
     </div>

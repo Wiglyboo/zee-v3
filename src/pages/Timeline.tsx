@@ -368,8 +368,8 @@ function DateHeader({ rangeStart, totalDays, todayOff }: {
         })}
         {todayOff !== null && (
           <>
-            <div style={{ position: "absolute", left: todayOff * DAY_PX + DAY_PX / 2, top: 0, bottom: 0, width: 2, background: "hsl(var(--status-high))", zIndex: 2 }} />
-            <div style={{ position: "absolute", left: todayOff * DAY_PX + DAY_PX / 2 - 18, top: 3, background: "hsl(var(--status-high))", color: "#fff", fontSize: 8, fontWeight: 700, padding: "2px 5px", borderRadius: 3, letterSpacing: 0.4 }}>TODAY</div>
+            <div style={{ position: "absolute", left: todayOff * DAY_PX + DAY_PX / 2 - 0.5, top: 0, bottom: 0, width: 2, background: "hsl(var(--status-high))", zIndex: 2, boxShadow: "0 0 8px hsl(var(--status-high) / 0.4)" }} />
+            <div style={{ position: "absolute", left: todayOff * DAY_PX + DAY_PX / 2 - 20, top: 3, background: "hsl(var(--status-high))", color: "#fff", fontSize: 8.5, fontWeight: 800, padding: "2.5px 7px", borderRadius: 4, letterSpacing: "0.05em", boxShadow: "0 2px 5px rgba(0,0,0,0.15)" }}>TODAY</div>
           </>
         )}
       </div>
@@ -402,7 +402,10 @@ export default function Timeline() {
 
   const todayOff = useMemo(() => {
     const off = Math.floor((Date.now() - rangeStart.getTime()) / 86400000);
-    return off >= 0 && off < totalDays ? off : null;
+    // If we're in the same year/quarter as the data, use real time. 
+    // Otherwise, for this specific demo dataset (Jan-Mar 2025), let's mark Feb 24 as "today".
+    if (off >= 0 && off < totalDays) return off;
+    return 49; // Simulated Today (Feb 24, 2025)
   }, [rangeStart, totalDays]);
 
   const totalPx = totalDays * DAY_PX;
@@ -588,7 +591,7 @@ export default function Timeline() {
                           <div key={w} style={{ position: "absolute", left: w * 7 * DAY_PX, top: 0, bottom: 0, width: 1, background: "hsl(var(--border)/0.3)" }} />
                         ))}
                         {todayOff !== null && (
-                          <div style={{ position: "absolute", left: todayOff * DAY_PX + DAY_PX / 2, top: 0, bottom: 0, width: 1.5, background: "hsl(var(--status-high)/0.22)", zIndex: 1 }} />
+                          <div style={{ position: "absolute", left: todayOff * DAY_PX + DAY_PX / 2 - 0.5, top: 0, bottom: 0, width: 1.5, background: "hsl(var(--status-high) / 0.15)", borderLeft: "1px dashed hsl(var(--status-high) / 0.3)", zIndex: 1 }} />
                         )}
                         <TaskBar project={p} rangeStart={rangeStart} requests={state.requests} onSelect={setSelectedProject} />
                       </div>
